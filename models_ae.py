@@ -465,10 +465,10 @@ def ae_d512_m64(N=2048):
     return create_autoencoder(dim=512, M=64, N=N, determinisitc=True)
 
 ###
-def ae_d256_m512(N=2048):
+def ae_d256_m512(N=1500):
     return create_autoencoder(dim=256, M=512, N=N, determinisitc=True)
 
-def ae_d128_m512(N=2048):
+def ae_d128_m512(N=1500):
     return create_autoencoder(dim=128, M=512, N=N, determinisitc=True)
 
 def ae_d64_m512(N=2048):
