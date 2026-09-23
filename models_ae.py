@@ -401,7 +401,7 @@ class KLAutoEncoder(nn.Module):
         # return o.squeeze(-1), kl
         return {'logits': o, 'kl': kl}
 
-def create_autoencoder(dim=512, M=512, latent_dim=64, N=2048, determinisitc=False):
+def create_autoencoder(dim=512, M=512, latent_dim=64, N=1500, determinisitc=False):
     if determinisitc:
         model = AutoEncoder(
             depth=24,

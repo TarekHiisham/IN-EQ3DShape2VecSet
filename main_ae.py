@@ -33,7 +33,7 @@ def get_args_parser():
     parser.add_argument('--model', default='ae_d512_m512', type=str, metavar='MODEL',
                         help='Name of model to train')
 
-    parser.add_argument('--point_cloud_size', default=2048, type=int,
+    parser.add_argument('--point_cloud_size', default=1500, type=int,
                         help='input size')
 
     # Optimizer parameters
