@@ -184,7 +184,7 @@ class AutoEncoder(nn.Module):
     def __init__(
         self,
         *,
-        depth=24,
+        depth=16,
         dim=512,
         queries_dim=512,
         output_dim = 1,
