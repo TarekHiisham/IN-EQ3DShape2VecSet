@@ -401,7 +401,7 @@ class KLAutoEncoder(nn.Module):
         # return o.squeeze(-1), kl
         return {'logits': o, 'kl': kl}
 
-def create_autoencoder(dim=512, M=512, latent_dim=64, N=1500, determinisitc=False):
+def create_autoencoder(dim=512, M=512, latent_dim=64, N=2048, determinisitc=False):
     if determinisitc:
         model = AutoEncoder(
             depth=24,
@@ -452,10 +452,10 @@ def kl_d512_m512_l1(N=2048):
     return create_autoencoder(dim=512, M=512, latent_dim=1, N=N, determinisitc=False)
 
 ###
-def ae_d512_m512(N=2048):
+def ae_d512_m512(N=1500):
     return create_autoencoder(dim=512, M=512, N=N, determinisitc=True)
 
-def ae_d512_m256(N=2048):
+def ae_d512_m256(N=1500):
     return create_autoencoder(dim=512, M=256, N=N, determinisitc=True)
 
 def ae_d512_m128(N=2048):
