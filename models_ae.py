@@ -11,6 +11,7 @@ from einops import rearrange, repeat
 from torch_cluster import fps
 
 from timm.models.layers import DropPath
+from torch.utils.checkpoint import checkpoint
 
 def exists(val):
     return val is not None
@@ -262,8 +263,8 @@ class AutoEncoder(nn.Module):
     def decode(self, x, queries):
 
         for self_attn, self_ff in self.layers:
-            x = self_attn(x) + x
-            x = self_ff(x) + x
+            x = checkpoint(self_attn, x, use_reentrant=False) + x
+            x = checkpoint(self_ff, x, use_reentrant=False) + x
 
         # cross attend from decoder queries to latents
         queries_embeddings = self.point_embed(queries)
@@ -404,7 +405,7 @@ class KLAutoEncoder(nn.Module):
 def create_autoencoder(dim=512, M=512, latent_dim=64, N=2048, determinisitc=False):
     if determinisitc:
         model = AutoEncoder(
-            depth=16,
+            depth=24,
             dim=dim,
             queries_dim=dim,
             output_dim = 1,
@@ -452,7 +453,7 @@ def kl_d512_m512_l1(N=2048):
     return create_autoencoder(dim=512, M=512, latent_dim=1, N=N, determinisitc=False)
 
 ###
-def ae_d512_m512(N=1500):
+def ae_d512_m512(N=2048):
     return create_autoencoder(dim=512, M=512, N=N, determinisitc=True)
 
 def ae_d512_m256(N=1500):

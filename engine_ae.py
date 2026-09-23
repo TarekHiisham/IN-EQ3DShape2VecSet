@@ -52,7 +52,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
         points_rot = torch.einsum('bij, bnj -> bni', R, points)
         surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
         
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast('cuda', enabled=False):
             outputs = model(surface, points)
             outputs_rot = model(surface_rot, points_rot)
             
@@ -160,7 +160,7 @@ def evaluate(data_loader, model, device):
         surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
 
         # compute output
-        with torch.cuda.amp.autocast(enabled=False):
+        with torch.amp.autocast('cuda', enabled=False):
 
             outputs = model(surface, points)
             outputs_rot = model(surface_rot, points_rot)
