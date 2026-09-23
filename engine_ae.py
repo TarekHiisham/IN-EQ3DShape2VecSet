@@ -147,7 +147,7 @@ def evaluate(data_loader, model, device):
     # switch to evaluation mode
     model.eval()
 
-    for points, labels, surface, _ in metric_logger.log_every(data_loader, 50, header):
+    for points, labels, surface in metric_logger.log_every(data_loader, 50, header):
 
         points = points.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
