@@ -70,6 +70,10 @@ def get_args_parser():
     parser.add_argument('--device', default='cuda',
                         help='device to use for training / testing')
     parser.add_argument('--seed', default=0, type=int)
+    parser.add_argument('--finetune', default='',
+                        help='path/url to a checkpoint from a possibly different architecture; '
+                         'loads only matching weights (by name+shape), starts a fresh '
+                         'optimizer/scaler and epoch 0. Use this for the pretrained checkpoint.')
     parser.add_argument('--resume', default='',
                         help='resume from checkpoint')
 
@@ -160,6 +164,7 @@ def main(args):
     model.to(device)
 
     model_without_ddp = model
+    misc.load_pretrained_for_finetune(args=args, model_without_ddp=model_without_ddp)
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
     print("Model = %s" % str(model_without_ddp))

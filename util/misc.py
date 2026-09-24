@@ -306,7 +306,25 @@ def save_model(args, epoch, model, model_without_ddp, optimizer, loss_scaler):
         client_state = {'epoch': epoch}
         model.save_checkpoint(save_dir=args.output_dir, tag="checkpoint", client_state=client_state)
 
+def load_pretrained_for_finetune(args, model_without_ddp):
+    if args.finetune:
+        if args.finetune.startswith('https'):
+            checkpoint = torch.hub.load_state_dict_from_url(
+                args.finetune, map_location='cpu', check_hash=True)
+        else:
+            checkpoint = torch.load(args.finetune, map_location='cpu', weights_only=False)
+        checkpoint_model = checkpoint['model'] if 'model' in checkpoint else checkpoint
 
+        model_state = model_without_ddp.state_dict()
+        matched = {
+            k: v for k, v in checkpoint_model.items()
+            if k in model_state and model_state[k].shape == v.shape
+        }
+
+        model_without_ddp.load_state_dict(matched, strict=False)
+        print("Fine-tune init from %s" % args.finetune)
+        print("Matched and loaded %d / %d params" % (len(matched), len(model_state)))
+        
 def load_model(args, model_without_ddp, optimizer, loss_scaler):
     if args.resume:
         if args.resume.startswith('https'):
