@@ -281,7 +281,7 @@ class AutoEncoder(nn.Module):
 
         o = self.decode(x, queries).squeeze(-1)
 
-        return {'logits': o}
+        return {'logits': o, 'latents': x}
 
 class KLAutoEncoder(nn.Module):
     def __init__(

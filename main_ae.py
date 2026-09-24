@@ -36,6 +36,9 @@ def get_args_parser():
     parser.add_argument('--point_cloud_size', default=2048, type=int,
                         help='input size')
 
+    parser.add_argument('--preservation', default='', type=str, metavar='Preservation type',
+                        help='kind of reservation either invariance or equivariance')
+    
     # Optimizer parameters
     parser.add_argument('--clip_grad', type=float, default=None, metavar='NORM',
                         help='Clip gradient norm (default: None, no clipping)')
@@ -194,7 +197,8 @@ def main(args):
     loss_scaler = NativeScaler()
 
     criterion = torch.nn.BCEWithLogitsLoss()
-    
+    criterion_lat = torch.nn.MSELoss()
+
     print("criterion = %s" % str(criterion))
 
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
@@ -211,7 +215,7 @@ def main(args):
         if args.distributed:
             data_loader_train.sampler.set_epoch(epoch)
         train_stats = train_one_epoch(
-            model, criterion,
+            model, criterion, criterion_lat,
             data_loader_train,
             optimizer, device, epoch, loss_scaler,
             args.clip_grad,
@@ -224,7 +228,7 @@ def main(args):
                 loss_scaler=loss_scaler, epoch=epoch)
 
         if epoch % 5 == 0 or epoch + 1 == args.epochs:
-            test_stats = evaluate(data_loader_val, model, device)
+            test_stats = evaluate(data_loader_val, model, device, args=args)
             print(f"iou of the network on the {len(dataset_val)} test images: {test_stats['iou']:.3f}")
             max_iou = max(max_iou, test_stats["iou"])
             print(f'Max iou: {max_iou:.2f}%')

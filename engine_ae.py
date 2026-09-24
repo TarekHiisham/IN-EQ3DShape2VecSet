@@ -17,7 +17,7 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 
 
-def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
+def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterion_lat: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
                     log_writer=None, args=None):
@@ -28,6 +28,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
     print_freq = 20
 
     accum_iter = args.accum_iter
+    preservation = args.pres
 
     optimizer.zero_grad()
 
@@ -46,36 +47,65 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         labels = labels.to(device, non_blocking=True)
         surface = surface.to(device, non_blocking=True)
 
-        R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
-        R = R.to(device)
-
-        points_rot = torch.einsum('bij, bnj -> bni', R, points)
-        surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
-        
         with torch.amp.autocast('cuda', enabled=False):
-            outputs = model(surface, points)
-            outputs_rot = model(surface_rot, points_rot)
+            o = model(surface, points)
             
-            if 'kl' in outputs:
-                loss_kl = outputs['kl']
+            if 'kl' in o:
+                loss_kl = o['kl']
                 loss_kl = torch.sum(loss_kl) / loss_kl.shape[0]
             else:
                 loss_kl = None
 
-            outputs = outputs['logits']
-            outputs_rot = outputs_rot['logits']
+            outputs = o['logits']
 
             loss_vol = criterion(outputs[:, :1024], labels[:, :1024])
             loss_near = criterion(outputs[:, 1024:], labels[:, 1024:])
             
-            loss_vol_inv = criterion(outputs_rot[:, :1024], labels[:, :1024])
-            loss_near_inv = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
-
-            
             if loss_kl is not None:
-                loss = loss_vol + 0.1 * loss_near + kl_weight * loss_kl + loss_vol_inv + 0.1 * loss_near_inv
+                loss = loss_vol + 0.1 * loss_near + kl_weight * loss_kl 
             else:
-                loss = loss_vol + 0.1 * loss_near + loss_vol_inv + 0.1 * loss_near_inv
+                loss = loss_vol + 0.1 * loss_near
+
+            if preservation == 'inv':
+                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                R = R.to(device)
+                points_rot = torch.einsum('bij, bnj -> bni', R, points)
+                surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
+                
+                o_rot = model(surface_rot, points_rot)
+                outputs_rot = o_rot['logits']
+
+                loss_vol_pres = criterion(outputs_rot[:, :1024], labels[:, :1024])
+                loss_near_pres = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
+
+                loss = loss + loss_vol_pres + 0.1 * loss_near_pres
+
+            elif preservation == 'equ':
+                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                irreps = o3.Irreps("128x0e + 128x1o")
+                D = irreps.D_from_matrix(R)
+                R = R.to(device)
+                D = D.to(device)
+
+                points_rot = torch.einsum('bij, bnj -> bni', R, points)
+                surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
+
+                o_rot = model(surface_rot, points_rot)
+                latents_rot = o_rot['latents']
+                outputs_rot = o_rot['logits']
+
+                lat_feat_expected = torch.einsum('bij, bnj -> bni', D, o['latents'])
+
+                loss_pres = criterion_lat(latents_rot, lat_feat_expected)
+                loss = loss + loss_pres
+
+            else:
+                outputs_rot = None
+                loss_vol_pres = None
+                loss_near_pres = None
+                loss_pres = None
+                iou_rot = None
+
 
         loss_value = loss.item()
 
@@ -90,16 +120,17 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         union = (pred + labels[:, :1024]).gt(0).sum(dim=1) + 1e-5
         iou = intersection * 1.0 / union
         iou = iou.mean()
+        
+        if outputs_rot is not None:
+            pred_rot = torch.zeros_like(outputs_rot[:, :1024])
+            pred_rot[outputs_rot[:, :1024]>=threshold] = 1
 
-        pred_rot = torch.zeros_like(outputs_rot[:, :1024])
-        pred_rot[outputs_rot[:, :1024]>=threshold] = 1
-
-        accuracy_rot = (pred_rot==labels[:, :1024]).float().sum(dim=1) / labels[:, :1024].shape[1]
-        accuracy_rot = accuracy_rot.mean()
-        intersection_rot = (pred_rot * labels[:, :1024]).sum(dim=1)
-        union_rot = (pred_rot + labels[:, :1024]).gt(0).sum(dim=1) + 1e-5
-        iou_rot = intersection_rot * 1.0 / union_rot
-        iou_rot = iou_rot.mean()
+            accuracy_rot = (pred_rot==labels[:, :1024]).float().sum(dim=1) / labels[:, :1024].shape[1]
+            accuracy_rot = accuracy_rot.mean()
+            intersection_rot = (pred_rot * labels[:, :1024]).sum(dim=1)
+            union_rot = (pred_rot + labels[:, :1024]).gt(0).sum(dim=1) + 1e-5
+            iou_rot = intersection_rot * 1.0 / union_rot
+            iou_rot = iou_rot.mean()
 
         if not math.isfinite(loss_value):
             print("Loss is {}, stopping training".format(loss_value))
@@ -115,18 +146,21 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
         torch.cuda.synchronize()
 
         metric_logger.update(loss=loss_value)
+        
+        if loss_vol_pres is not None:
+            metric_logger.update(loss_vol=loss_vol.item())
+            metric_logger.update(loss_near=loss_near.item())
 
-        metric_logger.update(loss_vol=loss_vol.item())
-        metric_logger.update(loss_near=loss_near.item())
-
-        metric_logger.update(loss_vol_inv=loss_vol_inv.item())
-        metric_logger.update(loss_near_inv=loss_near_inv.item())
+        if loss_pres is not None:
+            metric_logger.update(loss_equ_lat=loss_pres.item())
 
         if loss_kl is not None:
             metric_logger.update(loss_kl=loss_kl.item())
 
         metric_logger.update(iou=iou.item())
-        metric_logger.update(iou_rot=iou_rot.item())
+        
+        if iou_rot is not None:
+            metric_logger.update(iou_rot=iou_rot.item())
 
         min_lr = 10.
         max_lr = 0.
@@ -152,8 +186,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
 
 @torch.no_grad()
-def evaluate(data_loader, model, device):
+def evaluate(data_loader, model, device, args=None):
+    preservation = args.pres
+
     criterion = torch.nn.BCEWithLogitsLoss()
+    criterion_lat = torch.nn.MSELoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -167,67 +204,98 @@ def evaluate(data_loader, model, device):
         labels = labels.to(device, non_blocking=True)
         surface = surface.to(device, non_blocking=True)
 
-        R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
-        R = R.to(device)
-
-        points_rot = torch.einsum('bij, bnj -> bni', R, points)
-        surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
-
         # compute output
         with torch.amp.autocast('cuda', enabled=False):
 
-            outputs = model(surface, points)
-            outputs_rot = model(surface_rot, points_rot)
+            o = model(surface, points)
 
-            if 'kl' in outputs:
-                loss_kl = outputs['kl']
+            if 'kl' in o:
+                loss_kl = o['kl']
                 loss_kl = torch.sum(loss_kl) / loss_kl.shape[0]
             else:
                 loss_kl = None
 
-            outputs = outputs['logits']
-            outputs_rot = outputs_rot['logits']
+            outputs = o['logits']
 
             loss = criterion(outputs, labels)
-            loss_inv = criterion(outputs_rot, labels)
+
+            if preservation == 'inv':
+                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                R = R.to(device)
+                points_rot = torch.einsum('bij, bnj -> bni', R, points)
+                surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
+                
+                o_rot = model(surface_rot, points_rot)
+                outputs_rot = o_rot['logits']
+
+                loss_pres = criterion(outputs_rot, labels)
+
+                loss = loss + loss_pres 
+
+            elif preservation == 'equ':
+                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                irreps = o3.Irreps("128x0e + 128x1o")
+                D = irreps.D_from_matrix(R)
+                R = R.to(device)
+                D = D.to(device)
+
+                points_rot = torch.einsum('bij, bnj -> bni', R, points)
+                surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
+
+                o_rot = model(surface_rot, points_rot)
+                latents_rot = o_rot['latents']
+                outputs_rot = o_rot['logits']
+
+                lat_feat_expected = torch.einsum('bij, bnj -> bni', D, o['latents'])
+
+                loss_pres = criterion_lat(latents_rot, lat_feat_expected)
+                loss = loss + loss_pres
+
+            else:
+                o_rot = None
+                iou_rot = None
+                loss_pres = None
 
         threshold = 0
 
         pred = torch.zeros_like(outputs)
         pred[outputs>=threshold] = 1
 
-        pred_rot = torch.zeros_like(outputs_rot)
-        pred_rot[outputs_rot>=threshold] = 1
-
         accuracy = (pred==labels).float().sum(dim=1) / labels.shape[1]
-        accuracy_rot = (pred_rot==labels).float().sum(dim=1) / labels.shape[1]
-        
         accuracy = accuracy.mean()
-        accuracy_rot = accuracy_rot.mean()
 
         intersection = (pred * labels).sum(dim=1)
         union = (pred + labels).gt(0).sum(dim=1)
         iou = intersection * 1.0 / union + 1e-5
         iou = iou.mean()
 
-        intersection_rot = (pred_rot * labels).sum(dim=1)
-        union_rot = (pred_rot + labels).gt(0).sum(dim=1)
-        iou_rot = intersection_rot * 1.0 / union_rot + 1e-5
-        iou_rot = iou.mean()
-        
+        if o_rot is not None:
+            pred_rot = torch.zeros_like(outputs_rot)
+            pred_rot[outputs_rot>=threshold] = 1
+
+            accuracy_rot = (pred_rot==labels).float().sum(dim=1) / labels.shape[1]
+            accuracy_rot = accuracy_rot.mean()
+            intersection_rot = (pred_rot * labels).sum(dim=1)
+            union_rot = (pred_rot + labels).gt(0).sum(dim=1)
+            iou_rot = intersection_rot * 1.0 / union_rot + 1e-5
+            iou_rot = iou_rot.mean()
+                    
         batch_size = points.shape[0]
-        metric_logger.update(loss=loss.item())
-        metric_logger.update(loss_inv=loss_inv.item())
+        metric_logger.update(loss=loss.item()) 
+
+        if loss_pres is not None:
+            metric_logger.update(loss_pres=loss_pres.item())
 
         metric_logger.meters['iou'].update(iou.item(), n=batch_size)
-        metric_logger.meters['iou_rot'].update(iou_rot.item(), n=batch_size)
+        if iou_rot is not None:
+            metric_logger.meters['iou_rot'].update(iou_rot.item(), n=batch_size)
 
         if loss_kl is not None:
             metric_logger.update(loss_kl=loss_kl.item())
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* iou {iou.global_avg:.3f} iou_rot {iou_rot.global_avg:.3f} loss {losses.global_avg:.3f} loss_inv {losses_inv.global_avg:.7f}'
-          .format(iou=metric_logger.iou, iou_rot=metric_logger.iou_rot, losses=metric_logger.loss, losses_inv=metric_logger.loss_inv))
+    print('* iou {iou.global_avg:.3f} iou_rot {iou_rot.global_avg:.3f} loss {losses.global_avg:.3f} loss_pres {losses_pres.global_avg:.7f}'
+          .format(iou=metric_logger.iou, iou_rot=metric_logger.iou_rot, losses=metric_logger.loss, losses_pres=metric_logger.loss_pres))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
