@@ -46,6 +46,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
         points = points.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
         surface = surface.to(device, non_blocking=True)
+        
+        outputs_rot = None
+        loss_vol_pres = None
+        loss_near_pres = None
+        loss_pres = None
+        iou_rot = None
 
         with torch.amp.autocast('cuda', enabled=False):
             o = model(surface, points)
@@ -204,6 +210,10 @@ def evaluate(data_loader, model, device, args=None):
         labels = labels.to(device, non_blocking=True)
         surface = surface.to(device, non_blocking=True)
 
+        o_rot = None
+        iou_rot = None
+        loss_pres = None
+        
         # compute output
         with torch.amp.autocast('cuda', enabled=False):
 
