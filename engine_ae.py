@@ -118,7 +118,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
 
         metric_logger.update(loss_vol=loss_vol.item())
         metric_logger.update(loss_near=loss_near.item())
-        
+
         metric_logger.update(loss_vol_inv=loss_vol_inv.item())
         metric_logger.update(loss_near_inv=loss_near_inv.item())
 
@@ -228,6 +228,6 @@ def evaluate(data_loader, model, device):
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
     print('* iou {iou.global_avg:.3f} iou_rot {iou_rot.global_avg:.3f} loss {losses.global_avg:.3f} loss_inv {losses_inv.global_avg:.7f}'
-          .format(iou=metric_logger.iou, losses=metric_logger.loss, losses_inv=metric_logger.loss_inv))
+          .format(iou=metric_logger.iou, iou_rot=metric_logger.iou_rot, losses=metric_logger.loss, losses_inv=metric_logger.loss_inv))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
