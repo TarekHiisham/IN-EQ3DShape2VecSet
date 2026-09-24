@@ -28,7 +28,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
     print_freq = 20
 
     accum_iter = args.accum_iter
-    preservation = args.pres
+    preservation = args.preservation
 
     optimizer.zero_grad()
 
@@ -187,7 +187,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
 
 @torch.no_grad()
 def evaluate(data_loader, model, device, args=None):
-    preservation = args.pres
+    preservation = args.preservation
 
     criterion = torch.nn.BCEWithLogitsLoss()
     criterion_lat = torch.nn.MSELoss()
