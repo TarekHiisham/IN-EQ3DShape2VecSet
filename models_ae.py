@@ -405,7 +405,7 @@ class KLAutoEncoder(nn.Module):
 def create_autoencoder(dim=512, M=512, latent_dim=64, N=2048, determinisitc=False):
     if determinisitc:
         model = AutoEncoder(
-            depth=24,
+            depth=16,
             dim=dim,
             queries_dim=dim,
             output_dim = 1,
