@@ -17,7 +17,7 @@ import util.misc as misc
 import util.lr_sched as lr_sched
 
 
-def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterion_inv: torch.nn.Module,
+def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module,
                     data_loader: Iterable, optimizer: torch.optim.Optimizer,
                     device: torch.device, epoch: int, loss_scaler, max_norm: float = 0,
                     log_writer=None, args=None):
@@ -65,15 +65,17 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
             outputs = outputs['logits']
             outputs_rot = outputs_rot['logits']
 
-            loss_inv = criterion_inv(outputs, outputs_rot)
             loss_vol = criterion(outputs[:, :1024], labels[:, :1024])
             loss_near = criterion(outputs[:, 1024:], labels[:, 1024:])
+            
+            loss_vol_inv = criterion(outputs_rot[:, :1024], labels[:, :1024])
+            loss_near_inv = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
 
             
             if loss_kl is not None:
-                loss = loss_vol + 0.1 * loss_near + kl_weight * loss_kl + loss_inv
+                loss = loss_vol + 0.1 * loss_near + kl_weight * loss_kl + loss_vol_inv + 0.1 * loss_near_inv
             else:
-                loss = loss_vol + 0.1 * loss_near + loss_inv
+                loss = loss_vol + 0.1 * loss_near + loss_vol_inv + 0.1 * loss_near_inv
 
         loss_value = loss.item()
 
@@ -88,6 +90,16 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
         union = (pred + labels[:, :1024]).gt(0).sum(dim=1) + 1e-5
         iou = intersection * 1.0 / union
         iou = iou.mean()
+
+        pred_rot = torch.zeros_like(outputs_rot[:, :1024])
+        pred_rot[outputs_rot[:, :1024]>=threshold] = 1
+
+        accuracy_rot = (pred_rot==labels[:, :1024]).float().sum(dim=1) / labels[:, :1024].shape[1]
+        accuracy_rot = accuracy_rot.mean()
+        intersection_rot = (pred_rot * labels[:, :1024]).sum(dim=1)
+        union_rot = (pred_rot + labels[:, :1024]).gt(0).sum(dim=1) + 1e-5
+        iou_rot = intersection_rot * 1.0 / union_rot
+        iou_rot = iou_rot.mean()
 
         if not math.isfinite(loss_value):
             print("Loss is {}, stopping training".format(loss_value))
@@ -106,12 +118,15 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
 
         metric_logger.update(loss_vol=loss_vol.item())
         metric_logger.update(loss_near=loss_near.item())
-        metric_logger.update(loss_inv=loss_inv.item())
+        
+        metric_logger.update(loss_vol_inv=loss_vol_inv.item())
+        metric_logger.update(loss_near_inv=loss_near_inv.item())
 
         if loss_kl is not None:
             metric_logger.update(loss_kl=loss_kl.item())
 
         metric_logger.update(iou=iou.item())
+        metric_logger.update(iou_rot=iou_rot.item())
 
         min_lr = 10.
         max_lr = 0.
@@ -139,7 +154,6 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
 @torch.no_grad()
 def evaluate(data_loader, model, device):
     criterion = torch.nn.BCEWithLogitsLoss()
-    criterion_inv = torch.nn.MSELoss()
 
     metric_logger = misc.MetricLogger(delimiter="  ")
     header = 'Test:'
@@ -175,32 +189,45 @@ def evaluate(data_loader, model, device):
             outputs_rot = outputs_rot['logits']
 
             loss = criterion(outputs, labels)
-            loss_inv = criterion_inv(outputs, outputs_rot)
+            loss_inv = criterion(outputs_rot, labels)
 
         threshold = 0
 
         pred = torch.zeros_like(outputs)
         pred[outputs>=threshold] = 1
 
+        pred_rot = torch.zeros_like(outputs_rot)
+        pred_rot[outputs_rot>=threshold] = 1
+
         accuracy = (pred==labels).float().sum(dim=1) / labels.shape[1]
+        accuracy_rot = (pred_rot==labels).float().sum(dim=1) / labels.shape[1]
+        
         accuracy = accuracy.mean()
+        accuracy_rot = accuracy_rot.mean()
+
         intersection = (pred * labels).sum(dim=1)
         union = (pred + labels).gt(0).sum(dim=1)
         iou = intersection * 1.0 / union + 1e-5
         iou = iou.mean()
 
+        intersection_rot = (pred_rot * labels).sum(dim=1)
+        union_rot = (pred_rot + labels).gt(0).sum(dim=1)
+        iou_rot = intersection_rot * 1.0 / union_rot + 1e-5
+        iou_rot = iou.mean()
+        
         batch_size = points.shape[0]
         metric_logger.update(loss=loss.item())
         metric_logger.update(loss_inv=loss_inv.item())
 
         metric_logger.meters['iou'].update(iou.item(), n=batch_size)
+        metric_logger.meters['iou_rot'].update(iou_rot.item(), n=batch_size)
 
         if loss_kl is not None:
             metric_logger.update(loss_kl=loss_kl.item())
 
     # gather the stats from all processes
     metric_logger.synchronize_between_processes()
-    print('* iou {iou.global_avg:.3f} loss {losses.global_avg:.3f} loss_inv {losses_inv.global_avg:.7f}'
+    print('* iou {iou.global_avg:.3f} iou_rot {iou_rot.global_avg:.3f} loss {losses.global_avg:.3f} loss_inv {losses_inv.global_avg:.7f}'
           .format(iou=metric_logger.iou, losses=metric_logger.loss, losses_inv=metric_logger.loss_inv))
 
     return {k: meter.global_avg for k, meter in metric_logger.meters.items()}
