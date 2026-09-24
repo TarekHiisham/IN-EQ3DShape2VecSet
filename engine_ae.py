@@ -71,9 +71,9 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
 
             
             if loss_kl is not None:
-                loss = loss_vol + 0.1 * loss_near + kl_weight * loss_kl + 2 * loss_inv
+                loss = loss_vol + 0.1 * loss_near + kl_weight * loss_kl + loss_inv
             else:
-                loss = loss_vol + 0.1 * loss_near + 2 * loss_inv
+                loss = loss_vol + 0.1 * loss_near + loss_inv
 
         loss_value = loss.item()
 
