@@ -83,8 +83,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
 
                 loss_vol_pres = criterion(outputs_rot[:, :1024], labels[:, :1024])
                 loss_near_pres = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
-
-                loss = loss + loss_vol_pres + 0.1 * loss_near_pres
+                loss_pres = loss_vol_pres + 0.1 * loss_near_pres
+                loss = loss + loss_pres
 
             elif preservation == 'equ':
                 R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
@@ -152,12 +152,13 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
         torch.cuda.synchronize()
 
         metric_logger.update(loss=loss_value)
+        
         metric_logger.update(loss_vol=loss_vol.item())
         metric_logger.update(loss_near=loss_near.item())
 
         if loss_vol_pres is not None:
             metric_logger.update(loss_vol_inv=loss_vol_pres.item())
-            metric_logger.update(loss_vol_inv=loss_vol_pres.item())
+            metric_logger.update(loss_near_inv=loss_near_pres.item())
 
         if loss_pres is not None:
             metric_logger.update(loss_equ_lat=loss_pres.item())
