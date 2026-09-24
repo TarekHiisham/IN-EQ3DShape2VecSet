@@ -73,7 +73,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
                 loss = loss_vol + 0.1 * loss_near
 
             if preservation == 'inv':
-                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
                 R = R.to(device)
                 points_rot = torch.einsum('bij, bnj -> bni', R, points)
                 surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
@@ -87,7 +87,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
                 loss = loss + loss_vol_pres + 0.1 * loss_near_pres
 
             elif preservation == 'equ':
-                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
                 irreps = o3.Irreps("128x0e + 128x1o")
                 D = irreps.D_from_matrix(R)
                 R = R.to(device)
@@ -230,7 +230,7 @@ def evaluate(data_loader, model, device, args=None):
             loss = criterion(outputs, labels)
 
             if preservation == 'inv':
-                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
                 R = R.to(device)
                 points_rot = torch.einsum('bij, bnj -> bni', R, points)
                 surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
@@ -243,7 +243,7 @@ def evaluate(data_loader, model, device, args=None):
                 loss = loss + loss_pres 
 
             elif preservation == 'equ':
-                R = o3.rand_matrix(args.batch_size, dtype=points.dtype)
+                R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
                 irreps = o3.Irreps("128x0e + 128x1o")
                 D = irreps.D_from_matrix(R)
                 R = R.to(device)
