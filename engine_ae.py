@@ -152,7 +152,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
         torch.cuda.synchronize()
 
         metric_logger.update(loss=loss_value)
-        
+
         metric_logger.update(loss_vol=loss_vol.item())
         metric_logger.update(loss_near=loss_near.item())
 
@@ -161,7 +161,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
             metric_logger.update(loss_near_inv=loss_near_pres.item())
 
         if loss_pres is not None:
-            metric_logger.update(loss_equ_lat=loss_pres.item())
+            metric_logger.update(loss_pres=loss_pres.item())
 
         if loss_kl is not None:
             metric_logger.update(loss_kl=loss_kl.item())
