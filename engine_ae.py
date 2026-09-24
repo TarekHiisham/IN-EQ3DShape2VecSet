@@ -103,7 +103,11 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
                 lat_feat_expected = torch.einsum('bij, bnj -> bni', D, o['latents'])
 
                 loss_pres = criterion_lat(latents_rot, lat_feat_expected)
-                loss = loss + loss_pres
+                loss_vol_pres = criterion(outputs_rot[:, :1024], labels[:, :1024])
+                loss_near_pres = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
+    
+                loss_pres = loss_pres + loss_vol_pres + 0.1 * loss_near_pres
+                loss = loss + loss_pres 
 
             else:
                 outputs_rot = None
@@ -157,8 +161,8 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
         metric_logger.update(loss_near=loss_near.item())
 
         if loss_vol_pres is not None:
-            metric_logger.update(loss_vol_inv=loss_vol_pres.item())
-            metric_logger.update(loss_near_inv=loss_near_pres.item())
+            metric_logger.update(loss_vol_pres=loss_vol_pres.item())
+            metric_logger.update(loss_near_pres=loss_near_pres.item())
 
         if loss_pres is not None:
             metric_logger.update(loss_pres=loss_pres.item())
