@@ -88,7 +88,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
 
             elif preservation == 'equ':
                 R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
-                irreps = o3.Irreps("128x0e + 128x1o")
+                irreps = o3.Irreps("32x0e + 160x1o")
                 D = irreps.D_from_matrix(R)
                 R = R.to(device)
                 D = D.to(device)
@@ -103,10 +103,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
                 lat_feat_expected = torch.einsum('bij, bnj -> bni', D, o['latents'])
 
                 loss_pres = criterion_lat(latents_rot, lat_feat_expected)
-                loss_vol_pres = criterion(outputs_rot[:, :1024], labels[:, :1024])
-                loss_near_pres = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
-    
-                loss_pres = loss_pres + loss_vol_pres + 0.1 * loss_near_pres
+        
                 loss = loss + loss_pres 
 
             else:
