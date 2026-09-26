@@ -46,12 +46,6 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
         points = points.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True)
         surface = surface.to(device, non_blocking=True)
-        
-        outputs_rot = None
-        loss_vol_pres = None
-        loss_near_pres = None
-        loss_pres = None
-        iou_rot = None
 
         with torch.amp.autocast('cuda', enabled=False):
             o = model(surface, points)
@@ -63,6 +57,7 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
                 loss_kl = None
 
             outputs = o['logits']
+            latents = o['latents']
 
             loss_vol = criterion(outputs[:, :1024], labels[:, :1024])
             loss_near = criterion(outputs[:, 1024:], labels[:, 1024:])
@@ -79,11 +74,15 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
                 surface_rot = torch.einsum('bij, bnj -> bni', R, surface)
                 
                 o_rot = model(surface_rot, points_rot)
+                latents_rot = o_rot['latents']
                 outputs_rot = o_rot['logits']
 
-                loss_vol_pres = criterion(outputs_rot[:, :1024], labels[:, :1024])
-                loss_near_pres = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
-                loss_pres = loss_vol_pres + 0.1 * loss_near_pres
+                loss_vol_rot = criterion(outputs_rot[:, :1024], labels[:, :1024])
+                loss_near_rot = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
+
+                loss_latents = criterion_lat(latents, latents_rot)
+
+                loss_pres = loss_vol_rot + 0.1 * loss_near_rot + loss_latents
                 loss = loss + loss_pres
 
             elif preservation == 'equ':
@@ -100,16 +99,18 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
                 latents_rot = o_rot['latents']
                 outputs_rot = o_rot['logits']
 
-                lat_feat_expected = torch.einsum('bij, bnj -> bni', D, o['latents'])
+                lat_feat_expected = torch.einsum('bij, bnj -> bni', D, latents)
 
-                loss_pres = criterion_lat(latents_rot, lat_feat_expected)
-        
+                loss_vol_rot = criterion(outputs_rot[:, :1024], labels[:, :1024])
+                loss_near_rot = criterion(outputs_rot[:, 1024:], labels[:, 1024:])
+
+                loss_latents = criterion_lat(lat_feat_expected, latents_rot)
+
+                loss_pres = loss_vol_rot + 0.1 * loss_near_rot + loss_latents
                 loss = loss + loss_pres 
 
             else:
                 outputs_rot = None
-                loss_vol_pres = None
-                loss_near_pres = None
                 loss_pres = None
                 iou_rot = None
 
@@ -156,12 +157,12 @@ def train_one_epoch(model: torch.nn.Module, criterion: torch.nn.Module, criterio
 
         metric_logger.update(loss_vol=loss_vol.item())
         metric_logger.update(loss_near=loss_near.item())
-
-        if loss_vol_pres is not None:
-            metric_logger.update(loss_vol_pres=loss_vol_pres.item())
-            metric_logger.update(loss_near_pres=loss_near_pres.item())
+            
 
         if loss_pres is not None:
+            metric_logger.update(loss_vol_pres=loss_vol_rot.item())
+            metric_logger.update(loss_near_pres=loss_near_rot.item())
+            metric_logger.update(loss_latents=loss_latents.item())
             metric_logger.update(loss_pres=loss_pres.item())
 
         if loss_kl is not None:
@@ -214,10 +215,6 @@ def evaluate(data_loader, model, device, args=None):
         labels = labels.to(device, non_blocking=True)
         surface = surface.to(device, non_blocking=True)
 
-        o_rot = None
-        iou_rot = None
-        loss_pres = None
-        
         # compute output
         with torch.amp.autocast('cuda', enabled=False):
 
@@ -230,6 +227,7 @@ def evaluate(data_loader, model, device, args=None):
                 loss_kl = None
 
             outputs = o['logits']
+            latents = o['latents']
 
             loss = criterion(outputs, labels)
 
@@ -241,14 +239,17 @@ def evaluate(data_loader, model, device, args=None):
                 
                 o_rot = model(surface_rot, points_rot)
                 outputs_rot = o_rot['logits']
+                latents_rot = o_rot['latents']
 
-                loss_pres = criterion(outputs_rot, labels)
+                loss_latents = criterion_lat(latents, latents_rot)
+                loss_rot = criterion(outputs_rot, labels)
 
-                loss = loss + loss_pres 
+                loss_pres = loss_rot + loss_latents
+                loss = loss + loss_pres
 
             elif preservation == 'equ':
                 R = o3.rand_matrix(points.shape[0], dtype=points.dtype)
-                irreps = o3.Irreps("128x0e + 128x1o")
+                irreps = o3.Irreps("32x0e + 160x1o")
                 D = irreps.D_from_matrix(R)
                 R = R.to(device)
                 D = D.to(device)
@@ -260,9 +261,12 @@ def evaluate(data_loader, model, device, args=None):
                 latents_rot = o_rot['latents']
                 outputs_rot = o_rot['logits']
 
-                lat_feat_expected = torch.einsum('bij, bnj -> bni', D, o['latents'])
+                lat_feat_expected = torch.einsum('bij, bnj -> bni', D, latents)
 
-                loss_pres = criterion_lat(latents_rot, lat_feat_expected)
+                loss_latents = criterion_lat(latents_rot, lat_feat_expected)
+                loss_rot = criterion(outputs_rot, labels)
+
+                loss_pres = loss_rot + loss_latents
                 loss = loss + loss_pres
 
             else:
@@ -298,9 +302,12 @@ def evaluate(data_loader, model, device, args=None):
         metric_logger.update(loss=loss.item()) 
 
         if loss_pres is not None:
+            metric_logger.update(loss_rot=loss_rot.item())
+            metric_logger.update(loss_latents=loss_latents.item())
             metric_logger.update(loss_pres=loss_pres.item())
 
         metric_logger.meters['iou'].update(iou.item(), n=batch_size)
+        
         if iou_rot is not None:
             metric_logger.meters['iou_rot'].update(iou_rot.item(), n=batch_size)
 
