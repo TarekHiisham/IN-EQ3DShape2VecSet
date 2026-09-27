@@ -75,7 +75,8 @@ def get_args_parser():
     parser.add_argument('--seed', default=0, type=int)
     parser.add_argument('--resume', default='',
                         help='resume from checkpoint')
-
+    parser.add_argument('--finetune', default='',
+                    help='pretrained diffusion checkpoint to initialize weights from (not a training-state resume)')
     parser.add_argument('--start_epoch', default=0, type=int, metavar='N',
                         help='start epoch')
     parser.add_argument('--eval', action='store_true',
@@ -170,6 +171,8 @@ def main(args):
     model = models_class_cond.__dict__[args.model]()
     model.to(device)
 
+    misc.load_pretrained_for_finetune(args, model)
+    
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 
