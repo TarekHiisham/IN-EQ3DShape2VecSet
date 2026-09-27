@@ -60,8 +60,11 @@ def get_args_parser():
 
 
     # Dataset parameters
-    parser.add_argument('--data_path', default='/ibex/ai/home/zhanb0b/data', type=str,
-                        help='dataset path')
+    parser.add_argument('--mesh_folder', default='/content/surfaces', type=str,
+                                help='dataset path')
+        
+    parser.add_argument('--point_folder', default='/content/occupancies', type=str,
+                                help='dataset path')
 
     parser.add_argument('--output_dir', default='./output/',
                         help='path where to save, empty for no saving')
@@ -203,7 +206,7 @@ def main(args):
     misc.load_model(args=args, model_without_ddp=model_without_ddp, optimizer=optimizer, loss_scaler=loss_scaler)
 
     if args.eval:
-        test_stats = evaluate(data_loader_val, model, device)
+        test_stats = evaluate(data_loader_val, model, ae, criterion, device)
         print(f"loss of the network on the {len(dataset_val)} test images: {test_stats['loss']:.3f}")
         exit(0)
 

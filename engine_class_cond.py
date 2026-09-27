@@ -33,7 +33,7 @@ def train_one_epoch(model: torch.nn.Module, ae: torch.nn.Module, criterion: torc
     if log_writer is not None:
         print('log_dir: {}'.format(log_writer.log_dir))
 
-    for data_iter_step, (points, labels, surface, categories) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
+    for data_iter_step, (points, labels, surface) in enumerate(metric_logger.log_every(data_loader, print_freq, header)):
 
         # we use a per iteration (instead of per epoch) lr scheduler
         if data_iter_step % accum_iter == 0:
@@ -42,15 +42,14 @@ def train_one_epoch(model: torch.nn.Module, ae: torch.nn.Module, criterion: torc
         points = points.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True).long()
         surface = surface.to(device, non_blocking=True)
-        categories = categories.to(device, non_blocking=True)
 
 
         with torch.cuda.amp.autocast(enabled=False):
             with torch.no_grad():
 
-                _, x = ae.encode(surface)
+                x = ae.encode(surface)
 
-            loss = criterion(model, x, categories)
+            loss = criterion(model, x)
 
         loss_value = loss.item()
 
@@ -102,12 +101,12 @@ def evaluate(data_loader, model, ae, criterion, device):
     # switch to evaluation mode
     model.eval()
 
-    for points, labels, surface, categories in metric_logger.log_every(data_loader, 50, header):
+    for points, labels, surface in metric_logger.log_every(data_loader, 50, header):
 
         points = points.to(device, non_blocking=True)
         labels = labels.to(device, non_blocking=True).long()
         surface = surface.to(device, non_blocking=True)
-        categories = categories.to(device, non_blocking=True)
+        # categories = categories.to(device, non_blocking=True)
         # compute output
 
         with torch.cuda.amp.autocast(enabled=False):
@@ -115,7 +114,7 @@ def evaluate(data_loader, model, ae, criterion, device):
 
                 _, x = ae.encode(surface)
 
-            loss = criterion(model, x, categories)
+            loss = criterion(model, x)
             
         batch_size = surface.shape[0]
         

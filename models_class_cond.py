@@ -257,13 +257,13 @@ def edm_sampler(
         x_hat = x_cur + (t_hat ** 2 - t_cur ** 2).sqrt() * S_noise * randn_like(x_cur)
 
         # Euler step.
-        denoised = net(x_hat, t_hat, class_labels).to(torch.float64)
+        denoised = net(x_hat, t_hat).to(torch.float64)
         d_cur = (x_hat - denoised) / t_hat
         x_next = x_hat + (t_next - t_hat) * d_cur
 
         # Apply 2nd order correction.
         if i < num_steps - 1:
-            denoised = net(x_next, t_next, class_labels).to(torch.float64)
+            denoised = net(x_next, t_next).to(torch.float64)
             d_prime = (x_next - denoised) / t_next
             x_next = x_hat + (t_next - t_hat) * (0.5 * d_cur + 0.5 * d_prime)
 
@@ -429,7 +429,7 @@ class EDMLoss:
         self.P_std = P_std
         self.sigma_data = sigma_data
 
-    def __call__(self, net, inputs, labels=None, augment_pipe=None):
+    def __call__(self, net, inputs, augment_pipe=None):
         rnd_normal = torch.randn([inputs.shape[0], 1, 1], device=inputs.device)
         # rnd_normal = torch.randn([1, 1, 1], device=inputs.device).repeat(inputs.shape[0], 1, 1)
 
@@ -439,7 +439,7 @@ class EDMLoss:
 
         n = torch.randn_like(y) * sigma
 
-        D_yn = net(y + n, sigma, labels)
+        D_yn = net(y + n, sigma)
         loss = weight * ((D_yn - y) ** 2)
         return loss.mean()
 
@@ -483,10 +483,10 @@ class EDMPrecond(torch.nn.Module):
 
         self.model = LatentArrayTransformer(in_channels=channels, t_channels=256, n_heads=n_heads, d_head=d_head, depth=depth)
 
-        self.category_emb = nn.Embedding(55, n_heads * d_head)
+        # self.category_emb = nn.Embedding(55, n_heads * d_head)
 
-    def emb_category(self, class_labels):
-        return self.category_emb(class_labels).unsqueeze(1)
+    # def emb_category(self, class_labels):
+    #     return self.category_emb(class_labels).unsqueeze(1)
 
     def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
                 

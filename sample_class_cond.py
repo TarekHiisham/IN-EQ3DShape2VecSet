@@ -52,24 +52,17 @@ if __name__ == "__main__":
 
 
     with torch.no_grad():
-        for category_id in [18]:
-            print(category_id)
-            for i in range(1000//iters):
-                sampled_array = model.sample(cond=torch.Tensor([category_id]*iters).long().to(device), batch_seeds=torch.arange(i*iters, (i+1)*iters).to(device)).float()
-
-                print(sampled_array.shape, sampled_array.max(), sampled_array.min(), sampled_array.mean(), sampled_array.std())
-
-                for j in range(sampled_array.shape[0]):
-                    
-                    logits = ae.decode(sampled_array[j:j+1], grid)
-
-                    logits = logits.detach()
-                    
-                    volume = logits.view(density+1, density+1, density+1).permute(1, 0, 2).cpu().numpy()
-                    verts, faces = mcubes.marching_cubes(volume, 0)
-
-                    verts *= gap
-                    verts -= 1
-
-                    m = trimesh.Trimesh(verts, faces)
-                    m.export('class_cond_obj/{}/{:02d}-{:05d}.obj'.format(args.dm, category_id, i*iters+j))
+        for i in range(1000//iters):
+            sampled_array = model.sample(batch_seeds=torch.arange(i*iters, (i+1)*iters).to(device)).float()
+            print(sampled_array.shape, sampled_array.max(), sampled_array.min(), sampled_array.mean(), sampled_array.std())
+            for j in range(sampled_array.shape[0]):
+                
+                logits = ae.decode(sampled_array[j:j+1], grid)
+                logits = logits.detach()
+                
+                volume = logits.view(density+1, density+1, density+1).permute(1, 0, 2).cpu().numpy()
+                verts, faces = mcubes.marching_cubes(volume, 0)
+                verts *= gap
+                verts -= 1
+                m = trimesh.Trimesh(verts, faces)
+                m.export('class_cond_obj/{}/{:02d}-{:05d}.obj'.format(args.dm, i*iters+j))
