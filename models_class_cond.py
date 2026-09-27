@@ -490,10 +490,10 @@ class EDMPrecond(torch.nn.Module):
 
     def forward(self, x, sigma, class_labels=None, force_fp32=False, **model_kwargs):
                 
-        if class_labels.dtype == torch.float32:
-            cond_emb = class_labels
-        else:
-            cond_emb = self.category_emb(class_labels).unsqueeze(1)
+        # if class_labels.dtype == torch.float32:
+        #     cond_emb = class_labels
+        # else:
+        #     cond_emb = self.category_emb(class_labels).unsqueeze(1)
 
         x = x.to(torch.float32)
         sigma = sigma.to(torch.float32).reshape(-1, 1, 1)
@@ -504,7 +504,7 @@ class EDMPrecond(torch.nn.Module):
         c_in = 1 / (self.sigma_data ** 2 + sigma ** 2).sqrt()
         c_noise = sigma.log() / 4
 
-        F_x = self.model((c_in * x).to(dtype), c_noise.flatten(), cond=cond_emb, **model_kwargs)
+        F_x = self.model((c_in * x).to(dtype), c_noise.flatten(), cond=None, **model_kwargs)
         assert F_x.dtype == dtype
         D_x = c_skip * x + c_out * F_x.to(torch.float32)
         return D_x
@@ -514,14 +514,9 @@ class EDMPrecond(torch.nn.Module):
     
     @torch.no_grad()
     def sample(self, cond, batch_seeds=None):
-        # print(batch_seeds)
-        if cond is not None:
-            batch_size, device = *cond.shape, cond.device
-            if batch_seeds is None:
-                batch_seeds = torch.arange(batch_size)
-        else:
-            device = batch_seeds.device
-            batch_size = batch_seeds.shape[0]
+        
+        device = batch_seeds.device
+        batch_size = batch_seeds.shape[0]
 
         # batch_size, device = *cond.shape, cond.device
         # batch_seeds = torch.arange(batch_size)
