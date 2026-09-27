@@ -30,13 +30,14 @@ if __name__ == "__main__":
 
     ae = models_ae.__dict__[args.ae]()
     ae.eval()
-    ae.load_state_dict(torch.load(args.ae_pth)['model'])
+    ae.load_state_dict(torch.load(args.ae_pth, map_location='cpu', weights_only=False)['model'])
+
     ae.to(device)
 
     model = models_class_cond.__dict__[args.dm]()
     model.eval()
 
-    model.load_state_dict(torch.load(args.dm_pth)['model'])
+    model.load_state_dict(torch.load(args.dm_pth, map_location='cpu', weights_only=False)['model'])
     model.to(device)
 
     density = 128

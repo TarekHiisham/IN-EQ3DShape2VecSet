@@ -164,7 +164,7 @@ def main(args):
     ae = models_ae.__dict__[args.ae]()
     ae.eval()
     print("Loading autoencoder %s" % args.ae_pth)
-    ae.load_state_dict(torch.load(args.ae_pth, map_location='cpu')['model'])
+    ae.load_state_dict(torch.load(args.ae_pth, map_location='cpu', weights_only=False)['model'])
     
     ae.to(device)
 
@@ -172,7 +172,7 @@ def main(args):
     model.to(device)
 
     misc.load_pretrained_for_finetune(args, model)
-    
+
     model_without_ddp = model
     n_parameters = sum(p.numel() for p in model.parameters() if p.requires_grad)
 

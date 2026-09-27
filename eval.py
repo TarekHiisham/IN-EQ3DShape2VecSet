@@ -44,7 +44,7 @@ def main():
     device = torch.device(args.device)
 
     model.eval()
-    model.load_state_dict(torch.load(args.pth, map_location='cpu')[
+    model.load_state_dict(torch.load(args.pth, map_location='cpu', weights_only=False)[
                           'model'], strict=True)
     model.to(device)
     # print(model)
