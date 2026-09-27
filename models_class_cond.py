@@ -528,7 +528,7 @@ class EDMPrecond(torch.nn.Module):
 
 
 def kl_d512_m512_l8_edm():
-    model = EDMPrecond(n_latents=512, channels=8)
+    model = EDMPrecond(n_latents=512, channels=512)
     return model
 
 def kl_d512_m512_l16_edm():
