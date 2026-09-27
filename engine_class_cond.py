@@ -112,7 +112,7 @@ def evaluate(data_loader, model, ae, criterion, device):
         with torch.cuda.amp.autocast(enabled=False):
             with torch.no_grad():
 
-                _, x = ae.encode(surface)
+                x = ae.encode(surface)
 
             loss = criterion(model, x)
             
