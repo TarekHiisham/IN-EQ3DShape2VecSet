@@ -544,7 +544,7 @@ def kl_d512_m512_l4_d24_edm():
     return model
 
 def kl_d512_m512_l8_d24_edm():
-    model = EDMPrecond(n_latents=512, channels=8, depth=24)
+    model = EDMPrecond(n_latents=512, channels=512, depth=24)
     return model
 
 def kl_d512_m512_l32_d24_edm():
