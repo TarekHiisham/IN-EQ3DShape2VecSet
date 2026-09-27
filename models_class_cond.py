@@ -513,7 +513,7 @@ class EDMPrecond(torch.nn.Module):
         return torch.as_tensor(sigma)
     
     @torch.no_grad()
-    def sample(self, cond, batch_seeds=None):
+    def sample(self, batch_seeds=None):
         
         device = batch_seeds.device
         batch_size = batch_seeds.shape[0]
@@ -524,7 +524,7 @@ class EDMPrecond(torch.nn.Module):
         rnd = StackedRandomGenerator(device, batch_seeds)
         latents = rnd.randn([batch_size, self.n_latents, self.channels], device=device)
 
-        return edm_sampler(self, latents, cond, randn_like=rnd.randn_like)
+        return edm_sampler(self, latents, randn_like=rnd.randn_like)
 
 
 def kl_d512_m512_l8_edm():
