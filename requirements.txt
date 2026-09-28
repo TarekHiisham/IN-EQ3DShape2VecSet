@@ -1,6 +1,6 @@
 e3nn
 einops
-mcubes
+PyMCubes
 PyYAML
 scipy
 timm
