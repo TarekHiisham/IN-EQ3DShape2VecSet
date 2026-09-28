@@ -49,7 +49,22 @@ if __name__ == "__main__":
         for j in range(num_samples):
             latent_sample = sampled_array[j:j+1]
 
-            logits = ae.decode(latent_sample, grid)
+            chunk_size = 512  
+            num_points = grid.shape[1]
+            logits_list = []
+
+            for start_idx in range(0, num_points, chunk_size):
+                end_idx = min(start_idx + chunk_size, num_points)
+                grid_chunk = grid[:, start_idx:end_idx]  
+
+                chunk_logits = ae.decode(latent_sample, grid_chunk)
+                if isinstance(chunk_logits, dict):
+                    chunk_logits = chunk_logits["logits"]
+
+                logits_list.append(chunk_logits.detach())
+
+            logits = torch.cat(logits_list, dim=1)
+            
             if isinstance(logits, dict):
                 logits = logits['logits']
             logits = logits.detach()
