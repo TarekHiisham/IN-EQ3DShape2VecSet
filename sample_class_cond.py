@@ -23,13 +23,13 @@ if __name__ == "__main__":
 
     ae = models_ae.__dict__[args.ae]()
     ae.eval()
-    ae_ckpt = torch.load(args.ae_pth, map_location='cpu')
+    ae_ckpt = torch.load(args.ae_pth, weights_only=False, map_location='cpu')
     ae.load_state_dict(ae_ckpt['model'] if 'model' in ae_ckpt else ae_ckpt)
     ae.to(device)
 
     model = models_class_cond.__dict__[args.dm]()
     model.eval()
-    dm_ckpt = torch.load(args.dm_pth, map_location='cpu')
+    dm_ckpt = torch.load(args.dm_pth, weights_only=False, map_location='cpu')
     model.load_state_dict(dm_ckpt['model'] if 'model' in dm_ckpt else dm_ckpt)
     model.to(device)
 
