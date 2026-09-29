@@ -1,7 +1,7 @@
 import argparse
 from pathlib import Path
+import mcubes
 import numpy as np
-from skimage import measure 
 import torch
 import trimesh
 
@@ -22,14 +22,12 @@ if __name__ == "__main__":
 
   device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-  # AutoEncoder
   ae = models_ae.__dict__[args.ae]()
   ae.eval()
   ae_ckpt = torch.load(args.ae_pth, weights_only=False, map_location="cpu")
   ae.load_state_dict(ae_ckpt["model"] if "model" in ae_ckpt else ae_ckpt)
   ae.to(device)
 
-  # Diffusion Model
   model = models_class_cond.__dict__[args.dm]()
   model.eval()
   dm_ckpt = torch.load(args.dm_pth, weights_only=False, map_location="cpu")
@@ -87,15 +85,20 @@ if __name__ == "__main__":
       )
 
       if volume.max() > 0.0:
-        verts, faces, _, _ = measure.marching_cubes(volume, level=0.0)
+        verts, faces = mcubes.marching_cubes(volume, 0.0)
+
         verts = (verts * gap) - 1.0
 
         mesh = trimesh.Trimesh(vertices=verts, faces=faces)
+
+        connected = mesh.split(only_watertight=False)
+        if len(connected) > 0:
+          mesh = max(connected, key=lambda m: len(m.vertices))
+
         file_name = out_path / f"sample_{j:02d}.obj"
         mesh.export(str(file_name))
-        print(f"Exported: {file_name} (Vertices: {len(verts)})")
-      else:
         print(
-            f"Sample {j} skipped: No positive logits found (Max:"
-            f" {volume.max():.2f})"
+            f"Exported with PyMCubes: {file_name} (Vertices: {len(mesh.vertices)})"
         )
+      else:
+        print(f"Sample {j} skipped: All logits are negative.")
