@@ -1,5 +1,6 @@
 e3nn
 einops
+skimage
 PyMCubes
 PyYAML
 scipy

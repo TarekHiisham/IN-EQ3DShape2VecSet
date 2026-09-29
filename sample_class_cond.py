@@ -52,7 +52,6 @@ if __name__ == "__main__":
   with torch.no_grad():
     batch_seeds = torch.arange(num_samples, device=device)
 
-    # محاولة التوليد بدون cond ثم مع cond إذا كانت الدالة تتطلبها
     try:
       sampled_array = model.sample(batch_seeds=batch_seeds).float()
     except TypeError:
