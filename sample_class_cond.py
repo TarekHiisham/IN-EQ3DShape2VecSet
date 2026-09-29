@@ -85,7 +85,7 @@ if __name__ == "__main__":
       )
 
       if volume.max() > 0.0:
-        verts, faces = mcubes.marching_cubes(volume, 0.0)
+        verts, faces = mcubes.marching_cubes(volume, 0.5)
 
         verts = (verts * gap) - 1.0
 
